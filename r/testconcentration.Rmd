@@ -1,0 +1,107 @@
+---
+title: "Database_Test"
+author: "Jeroen Middelbeek"
+date: "3/12/2019"
+output: html_document
+---
+
+
+
+```{r, root, include=FALSE}
+require("rprojroot") || utils::install.packages("rprojroot")
+library(rprojroot)
+root <- find_root_file(criterion = is_rstudio_project)
+```
+
+```{r, load dataset}
+
+library(readxl)
+
+results <- file.path(root, "data-raw/2019-2-22_testconcentration", "results.csv")
+parameters <- file.path(root, "data-raw/2019-2-22_testconcentration", "parameters.xlsx")
+
+
+
+```
+
+
+```{r tidy}
+library(tidyverse)
+
+#open & read results.csv 
+results.col <- read_csv(results, col_names = TRUE) %>%
+  separate(Label, into = c("stack_id","image_id"), sep=":") %>%
+  separate(image_id, into = c("exp_id","exp_id2", "plate_id","plate_id2", "well_id"), sep=" ") 
+                   
+#open & read parameters.xlsx                         
+workbook <- readxl::excel_sheets(path = parameters)
+data.col <- readxl::read_xlsx(path = parameters, sheet = workbook[2]) %>%
+  unite("compound", comp_name, comp_id, comp_trtmnt, sep = "-")
+
+#join results with parameters
+df <- results.col%>%
+    select (X1, well_id, Area)%>%
+    left_join(data.col, by = "well_id")
+
+#filter data
+df_filtered <- dplyr::filter(df, Area>1) %>% 
+  mutate (od = as.factor(od)) %>%
+ # mutate (image_rep = as.factor(image_rep)) %>%
+  mutate (well_rep = as.factor(well_rep)) %>%
+  mutate (comp_dil = as.factor(comp_dil))
+  mutate (compound = as.factor(compound))
+
+df
+```
+
+```{r analysis}
+ggplot(data=df_filtered, mapping = aes(x = comp_dil)) +
+  geom_bar(
+    mapping = aes(color = well_rep, fill = well_rep),
+    position = position_dodge(width=0.6),
+    width=0.5) +
+  facet_wrap(~compound, nrow = 2, scale = "fixed")
+
+ggplot(data=df_filtered, mapping = aes(x = comp_dil, y = log10(Area))) +
+  geom_point(aes(colour = well_rep, alpha = 0.1), 
+    # position = position_dodge(width=0.6)) +
+    position = "jitter" )+
+  facet_wrap(~ compound)
+
+ggplot(data=df_filtered, mapping = aes(x = comp_dil, y = log10(Area))) +
+  geom_point(aes(alpha = 0.001), 
+    # position = position_dodge(width=0.6)) +
+    position = "jitter" )+
+  facet_wrap(~ compound)
+
+ggplot(data=df_filtered, mapping = aes(x = comp_dil, y = log10(Area))) +
+  geom_boxplot(aes(alpha = 0.001))+ 
+    facet_wrap(~ compound)
+
+particle_size <- df_filtered%>%
+  group_by(comp_dil, compound, well_rep) %>%
+  summarize( 
+            size_mean = mean(Area, na.rm=TRUE),
+            size_sd = sd(Area, na.rm=TRUE)
+            )
+
+#INTRARAWELL REPRODUCIBILITY
+ggplot(data=particle_size, mapping = aes(x=comp_dil, y = (size_mean), colour = well_rep))+
+  geom_boxplot()+
+  #geom_errorbar(aes(ymin=(size_mean - size_sd), ymax=(size_mean + size_sd)), width=.2, position=position_dodge(.9))+
+  facet_wrap(~compound)
+
+#INTERWELL REPRODUCIBILITY
+ggplot(data=particle_size, mapping = aes(x=comp_dil, y = (size_mean), colour = well_rep))+
+  geom_boxplot()+
+  #geom_errorbar(aes(ymin=(size_mean - size_sd), ymax=(size_mean + size_sd)), width=.2, position=position_dodge(.9))+
+  facet_wrap(~ compound)
+
+#Experiment
+ggplot(data=particle_size, mapping = aes(x=comp_dil, y = (size_mean)))+
+  geom_boxplot()+
+ # geom_errorbar(aes(ymin=(size_mean - size_sd), ymax=(size_mean + size_sd)), width=.2
+ #               )+
+  facet_wrap(~ compound)
+
+```

@@ -1,0 +1,86 @@
+---
+title: "Particle size Bioclin"
+author: "Marc"
+date: "15-2-2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r, root, include=FALSE}
+require("rprojroot") || utils::install.packages("rprojroot")
+library(rprojroot)
+root <- find_root_file(criterion = is_rstudio_project)
+
+```
+
+## Data
+
+Data obtained as Excel files from J. Middelbeek op 15 February 2019
+```{r}
+library(tidyverse)
+library(readxl)
+file_path <- file.path(root, "data-raw", "Test3.xlsx")
+workbook <- readxl::excel_sheets(file_path)
+data_particle_1 <- readxl::read_xlsx(path = file_path, sheet = workbook[1]) 
+data_particle_2 <- readxl::read_xlsx(path = file_path, sheet = workbook[2])
+
+data_particle_1 <- data_particle_1 %>%
+  rename(particle_number = Particle_1, area = Area_1) %>%
+  mutate(experiment = 1)
+
+
+data_particle_2 <- data_particle_2 %>%
+  rename(particle_number = Particle_2, area = Area_2) %>%
+  mutate(experiment = 2)
+
+names(data_particle_1) == names(data_particle_2)
+
+data_all <- dplyr::bind_rows(data_particle_1, data_particle_2)
+
+#data_filter <- filter(data_all, area > 0)
+
+```
+
+
+## Plots
+```{r}
+data_filter %>%
+  mutate(experiment = as_factor(as.character(experiment))) %>%
+  ggplot(aes(x = log10(area))) +
+  geom_histogram(bins=30) +
+  facet_wrap(~ experiment) +
+  theme_bw()
+
+data_filter %>%
+  mutate(experiment = as_factor(as.character(experiment))) %>%
+  ggplot(aes(x = log10(area))) +
+  geom_histogram(aes(group = experiment, fill = experiment), bins=30, alpha = 0.8) 
+
+
+
+
+```
+
+## Dots
+```{r}
+
+data_all %>%
+  mutate(experiment = as_factor(as.character(experiment))) %>%
+  dplyr::filter(area > 1000) %>%
+  #New_var <- row_number(nrow(.))
+  ggplot(aes(x = particle_number, y = log10(area))) +
+  geom_point(aes(group = experiment, colour = experiment), alpha = 0.6) +
+  theme_bw()
+
+```
+
+
+
+
+
+
+

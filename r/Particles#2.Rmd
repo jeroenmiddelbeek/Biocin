@@ -1,0 +1,41 @@
+---
+title: "Particle Analysis#2"
+author: "Jeroen Middelbeek"
+date: "2/23/2019"
+output: html_document
+---
+
+```{r, root, include=FALSE}
+require("rprojroot") || utils::install.packages("rprojroot")
+library(rprojroot)
+root <- find_root_file(criterion = is_rstudio_project)
+
+```
+
+```{r}
+library(tidyverse)
+library(readxl)
+file_path <- file.path(root, "data-raw", "Test9.xlsx")
+Data_All <- readxl::read_xlsx(path = file_path) 
+ 
+
+Data_Filtered <- dplyr::filter(Data_All, Area>1) %>% 
+mutate (Concentration = as.factor(Concentration)) %>% 
+mutate (Treatment = as.factor(Treatment))
+
+  ggplot(data=Data_Filtered, mapping = aes(x=Particle, y=log10(Area)))+ 
+    geom_point(mapping = aes(color = Concentration))+
+    geom_smooth(mapping = aes(group = Treatment))
+    #facet_wrap(~ Treatment)
+  
+  ggplot(data=Data_Filtered, mapping = aes(x=Concentration, y=log10(Area)))+
+    geom_boxplot(mapping = aes(notch=FALSE))+
+    facet_wrap(~ Treatment, nrow=2)
+  
+  #ggplot(data=Data_Filtered)+
+   # geom_col(mapping = aes(x=Concentration, y=log10(Area)))+
+    #facet_wrap(~ Treatment)
+   
+
+```
+

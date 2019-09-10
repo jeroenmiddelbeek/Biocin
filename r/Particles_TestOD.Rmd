@@ -1,0 +1,93 @@
+---
+title: "Particle Analysis#2"
+author: "Jeroen Middelbeek"
+date: "2/23/2019"
+output: html_document
+---
+
+
+```{r, root, include=FALSE}
+require("rprojroot") || utils::install.packages("rprojroot")
+library(rprojroot)
+root <- find_root_file(criterion = is_rstudio_project)
+
+```
+
+```{r, data}
+library(tidyverse)
+library(readxl)
+
+file_path <- file.path(root, "data-raw/2019-2-22_testconcentration", "test_threshold100.xlsx")
+data_all <- readxl::read_xlsx(path = file_path) #%>%
+ # mutate (well=case_when(
+     # well == "A" ~ "1",
+     # well == "B" ~ "2",
+     # well == "C" ~ "1",
+     # well == "D" ~ "2",
+    #  well == "E" ~ "1",
+    #  well == "F" ~ "2",
+    #  well == "G" ~ "1",
+    #  well == "H" ~ "2"
+    #  ))
+
+data_filtered <- dplyr::filter(data_all, area>1000) %>% 
+  mutate (od = as.factor(od)) %>%
+  mutate (duplo = as.factor(duplo)) %>%
+  mutate (well = as.factor(well)) %>%
+  mutate (dilution = as.factor(dilution))
+
+#data_filtered_untreated <- dplyr::filter(Data_Filtered, treatment=="nosample") 
+#data_filtered_treated <- dplyr::filter(Data_Filtered, treatment=="S18dial")
+
+ggplot(data=data_filtered, mapping = aes(x = od)) +
+  geom_bar(
+    mapping = aes(color = well, fill = well),
+    position = position_dodge(width=0.6),
+    width=0.5) +
+  facet_grid(treatment~dilution, scale = "fixed")
+
+#ggplot(data=data_filtered_untreated, mapping = aes(x = od)) +
+  #geom_bar(
+    #mapping = aes(color=well),
+    #position = position_dodge(width=0.6),
+    #width=0.5) 
+
+#ggplot(data=Data_Filtered_treated, mapping = aes(x = od)) +
+  #geom_bar(
+    #mapping = aes(color=well),
+    #position = position_dodge(width=0.6),
+    #width=0.5) 
+
+data_summary <- data_filtered %>%
+  group_by(treatment, dilution, well) %>%
+  summarise(mean_area = mean(area, na.rm = TRUE),
+            sd = sd(area),
+            n = n()) 
+  write_csv()
+  
+  
+  
+  
+  
+  plot <-  ggplot(aes(x = dilution, y = log10(area))) +
+ geom_point(aes(colour = well), position = "jitter", alpha = 0.3) +
+#   geom_boxplot() +
+  facet_wrap(~ treatment)
+
+    map(data_filtered, typeof)
+
+   
+ggplot(data=data_filtered, mapping = aes(x=dilution, y=log10(area)))+
+  geom_boxplot(
+    mapping = aes(color=well), 
+    outlier.shape=NA, 
+    show.legend=TRUE, 
+    coef=0, 
+    position = position_dodge(width=0.6), 
+    width=0.5)+
+    theme_bw()+
+     #geom_boxplot(width=0.75, alpha = 0.5)+
+    facet_wrap(~ treatment, nrow=2)
+
+
+```
