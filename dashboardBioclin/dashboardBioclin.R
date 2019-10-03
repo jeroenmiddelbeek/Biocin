@@ -7,7 +7,7 @@ library(DT)
 library(ggridges)
 
 # set max file size
-options(shiny.maxRequestSize=50*1024^2)
+options(shiny.maxRequestSize=100*1024^2)
 
 # Define UI for application that draws a histogram
 ui <- dashboardPage(
@@ -24,7 +24,7 @@ ui <- dashboardPage(
       
       box(
         style = "position: fixed",
-        sliderInput(inputId = "area", label = h4("Set area cut-off (0-1000)"), value = 0, min = 0, max = 1000)
+        sliderInput(inputId = "area", label = h4("Set area cut-off (0-1000)"), value = 10, min = 0, max = 1000)
         ),
         
       box(
@@ -75,14 +75,9 @@ ui <- dashboardPage(
     
     box(
       selectInput(inputId = "axisX", 
-                  label = "",
+                  label = "Select X-axis",
                   choices  = c("comp_dil", "od"),
-                  selected = "comp_dil"), 
-      
-      checkboxInput(inputId = "log10transform",
-                    label = "Log10 Transform",
-                    value = TRUE)
-      
+                  selected = "comp_dil")
       ),
    
     box (
@@ -90,6 +85,19 @@ ui <- dashboardPage(
       width = 12,
       solidHeader = TRUE,
       status = "primary",
+      
+      checkboxInput(inputId = "log10transformCount",
+                    label = "Log10 Transformation X-axis",
+                    value = TRUE),
+      
+      selectInput(inputId = "facetRowCount", 
+                  label = "Facet Row",
+                  choices = c(None=".", "compound", "od", "well_rep")),
+      
+      selectInput(inputId = "facetColCount", 
+                  label = "Facet Column",
+                  choices = c(None=".", "compound", "od", "well_rep")),
+      
       plotOutput("countPlot")
       ),
     
@@ -101,14 +109,52 @@ ui <- dashboardPage(
       plotOutput("densityPlot")
       ),
     
-    box (
-      title = "Particles",
+    # box (
+    #   title = "Particle",
+    #   width = 12,
+    #   solidHeader = TRUE,
+    #   status = "primary",
+    #   
+    #   checkboxInput(inputId = "log10transformParticle",
+    #                 label = "Log10 Transformation X-axis",
+    #                 value = TRUE),
+    #   
+    #   selectInput(inputId = "facetRowParticle", 
+    #               label = "Facet Row",
+    #               choices = c(None=".", "compound", "od")),
+    #   
+    #   selectInput(inputId = "facetColParticle", 
+    #               label = "Facet Column",
+    #               choices = c(None=".", "compound", "od")),
+    #   
+    #   plotOutput("particlePlot")
+    #   ),
+    
+    box(
+      title = "Mean Area",
       width = 12,
       solidHeader = TRUE,
       status = "primary",
-      plotOutput("particlePlot")
-    )
-    
+      
+      checkboxInput(inputId = "log10transformMeanArea",
+                    label = "Log10 Transformation X-axis",
+                    value = TRUE),
+      
+      selectInput(inputId = "facetRowArea", 
+                  label = "Facet Row",
+                  choices = c(None=".", "compound", "od", "well_rep")),
+         
+      selectInput(inputId = "facetColArea", 
+                  label = "Facet Column",
+                  choices = c(None=".", "compound", "od", "well_rep")),
+      
+      
+      
+      
+      plotOutput("meanAreaPlot"),
+      plotOutput("meanImagePlot"),
+      plotOutput("meanExpPlot")
+      )
     )
   )
 
@@ -227,10 +273,9 @@ server <- function(input, output) {
                                   od %in% input$filterOd,
                                   dye %in% input$filterDye,
                                   comp_dil %in% input$filterCompDil, 
-                                  image_rep %in% input$filterImageRep) # %in% matching operator --> filtered voor alle elementen in x (match) --> de == operator werkt niet omdattie dan opzoek gaat naar cellen die voldoen aan alle eigenschappen in input$strain
-          })
-  
-  
+                                  image_rep %in% input$filterImageRep)#%>% # %in% matching operator --> filtered voor alle elementen in x (match) --> de == operator werkt niet omdattie dan opzoek gaat naar cellen die voldoen aan alle eigenschappen in input$strain
+                    #sample_frac(0.1)
+           })
   
   #generate output
   sumImageRep <- reactive({
@@ -238,9 +283,31 @@ server <- function(input, output) {
       group_by(od, comp_dil, compound, well_rep, image_rep) %>%
       summarize( 
         count = n(),
-        mean_area = mean(Area, na.rm=TRUE),
-        sd_area = sd(Area, na.rm=TRUE)
-      )
+        meanArea = mean(Area, na.rm=TRUE),
+        sdArea = sd(Area, na.rm=TRUE)
+        )
+  })
+  
+  sumWellRep <- reactive ({
+    sumImageRep() %>%
+      group_by(od, comp_dil, compound, well_rep) %>%
+      summarize( 
+        count = n(),
+        meanImage = mean(meanArea, na.rm=TRUE),
+        sdImage = sd(meanArea, na.rm=TRUE),
+        semImage = sd(meanArea, na.rm=TRUE)/sqrt(n())
+        )
+  })
+  
+  sumExp <- reactive ({
+    sumWellRep() %>%
+      group_by(od, comp_dil, compound) %>%
+      summarize( 
+        count = n(),
+        meanWell = mean(meanImage, na.rm=TRUE),
+        sdWell = sd(meanImage, na.rm=TRUE),
+        semWell = sd(meanImage, na.rm=TRUE)/sqrt(n())
+        )
   })
   
   output$numberUnfilteredRecords <- renderText({
@@ -266,29 +333,26 @@ server <- function(input, output) {
                                                          pageLength = 5,
                                                          searching = FALSE))
   
-  output$countPlot  <- renderPlot({
+  output$countPlot <- renderPlot({
     
-    if(input$log10transform == TRUE){
-    
-      ggplot(data = sumImageRep(), mapping = aes_string(x = input$axisX, y = "count")) + #aes_string to be able to refer to input$axisX. reference to column count needs to be in between ""
+      plot2 <- ggplot(data = sumImageRep(), mapping = aes_string(x = input$axisX, y = "count")) + #aes_string to be able to refer to input$axisX. reference to column count needs to be in between ""
         geom_line(
           mapping = aes(color = image_rep)) +
-          ggtitle("Particle Count") +
-          scale_x_continuous(trans = 'log10') +
-          facet_grid(od ~ well_rep, scale = "fixed")
+          ggtitle("Particle Count") #+
+          #scale_x_continuous(trans = 'log10') +
+          #facet_grid(od ~ well_rep, scale = "fixed")
     
-    } else {
-        
-      ggplot(data = sumImageRep(), mapping = aes_string(x = input$axisX, y = "count")) + #aes_string to be able to refer to input$axisX. reference to column count needs to be in between ""
-        geom_line(
-          mapping = aes(color = image_rep)) +
-          ggtitle("Particle Count") +
-          facet_grid(od ~ well_rep, scale = "fixed")
-      }
+      if(input$log10transformCount == TRUE)
+        plot2 <- plot2 + scale_x_continuous(trans = 'log10')
       
+      facetsCount <- paste(input$facetRowCount, '~', input$facetColCount)
+      if (facetsCount != '. ~ .') 
+        plot2 <- plot2 + facet_grid(facetsCount)
+      
+      print(plot2)
       })
 
-output$densityPlot <- renderPlot({
+  output$densityPlot <- renderPlot({
       ggplot(data = dataMergeFiltered(), mapping = aes(x = log10(Area), y = comp_dil_factor, fill = od)) +
         geom_density_ridges(
           mapping = aes(height=(stat(density))),
@@ -301,6 +365,76 @@ output$densityPlot <- renderPlot({
         scale_y_discrete(expand = c(0.01, 0)) +
         facet_grid(~od, scale = "fixed")
       })
+
+  # output$particlePlot <- renderPlot({
+  #     
+  #     plot3 <- ggplot(data = dataMergeFiltered(), mapping = aes_string(x = input$axisX, y = "log10(Area)")) +
+  #       geom_point(
+  #         mapping = aes_string(color = "well_rep", group = input$axisX),
+  #         alpha = 0.1,
+  #         position = "jitter" ) +
+  #       ggtitle("Particle Size (log)")
+  #     
+  #     if (input$log10transformParticle == TRUE)
+  #       plot3 <- plot3 + scale_x_continuous(trans = 'log10')
+  #     
+  #     facetsParticle <- paste(input$facetRowParticle, '~', input$facetColParticle)
+  #     if (facetsParticle != '. ~ .') 
+  #       plot3 <- plot3 + facet_grid(facetsParticle)
+  #       
+  #     print(plot3)
+  #   })
+  
+  output$meanAreaPlot <- renderPlot({
+    
+      plot4 <- ggplot(data = sumImageRep(), mapping = aes_string(x = input$axisX, y = "log10(meanArea)", color = "image_rep")) +
+                  geom_line() +
+                  #geom_errorbar(mapping = aes(x = log10(get(n)), ymin = log10(mean_area - sd_area) , ymax = log10(mean_area + sd_area))) +
+                  ggtitle("Intrawell Reproducibility") 
+    
+                if (input$log10transformMeanArea == TRUE)
+                plot4 <- plot4 + scale_x_continuous(trans = 'log10')
+      
+                facetsArea <- paste(input$facetRowArea, '~', input$facetColArea)
+                if (facetsArea != '. ~ .') 
+                  plot4 <- plot4 + facet_grid(facetsArea)
+                
+                print(plot4)
+  }) 
+  
+  output$meanImagePlot <- renderPlot({
+    
+      plot5 <- ggplot(data = sumWellRep(), mapping = aes_string(x = input$axisX, y = "log10(meanImage)")) +
+                    geom_ribbon(mapping = aes_string(x = input$axisX, ymin = "log10(meanImage - semImage)", ymax = "log10(meanImage + semImage)", fill = "well_rep", alpha=0.1)) +
+                      geom_line(mapping = aes(color = well_rep)) +
+                      ggtitle("Interwell Reproducibility") 
+    
+                if (input$log10transformMeanArea == TRUE)
+                  plot5 <- plot5 + scale_x_continuous(trans = 'log10')
+                
+                facetsArea <- paste(input$facetRowArea, '~', input$facetColArea)
+                if (facetsArea != '. ~ .') 
+                  plot5 <- plot5 + facet_grid(facetsArea)
+    
+    print(plot5)
+  })
+  
+  output$meanExpPlot <- renderPlot({
+    
+      plot6 <- ggplot(data = sumExp(), mapping = aes_string(x = input$axisX, y = "log10(meanWell)")) +
+                  geom_ribbon(mapping = aes_string(x = input$axisX, ymin = "log10(meanWell - semWell)", ymax = "log10(meanWell + semWell)", alpha=0.1)) +
+                    geom_line() +
+                    ggtitle("Experiment") 
+    
+                if (input$log10transformMeanArea == TRUE)
+                  plot6 <- plot6 + scale_x_continuous(trans = 'log10')
+    
+                facetsArea <- paste('~', input$facetColArea)
+                if (facetsArea != '~ .') 
+                  plot6 <- plot6 + facet_grid(facetsArea)
+    
+                print(plot6)
+  })  
 }
 
 # Run the application 
