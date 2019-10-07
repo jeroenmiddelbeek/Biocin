@@ -21,16 +21,28 @@ ui <- dashboardPage(
       
       fileInput(inputId = "parameters", label = h4("Insert parameters file (xlsx)"), multiple = FALSE),
       fileInput(inputId = "results", label = h4("Insert results file (CSV)"), multiple = FALSE),
+      sliderInput(inputId = "area", label = h4("Set area cut-off (1-1000)"), value = 10, min = 0, max = 500, step = 5, ticks = FALSE, animate = TRUE),
       
       box(
-        style = "position: fixed",
-        sliderInput(inputId = "area", label = h4("Set area cut-off (0-1000)"), value = 10, min = 0, max = 1000)
-        ),
-        
+        title = "Select Parameters",
+        width = 12,
+        #collapsible = TRUE, 
+        #collapsed = TRUE,
+        background = "navy",
+        solidHeader = TRUE,
+        status = "primary",
+        box (title = "Plate", width = 12, background = "black", status = "primary", uiOutput(outputId = "checkboxPlate")),
+        box (title = "Strain", width = 12, background = "black", status = "primary", uiOutput(outputId = "checkboxStrain")),
+        box (title = "Compound", width = 12, background = "black", status = "primary", uiOutput(outputId = "checkboxCompound")),
+        box (title = "Od", width = 12, background = "black", status = "primary", uiOutput(outputId = "checkboxOd")),
+        box (title = "Dye", width = 12, background = "black", status = "primary", uiOutput(outputId = "checkboxDye")),
+        box (title = "Compound dilution", width = 12, background = "black", status = "primary", uiOutput(outputId = "checkboxCompDil")),
+        box (title = "Image repeat", width = 12, background = "black", status ="primary", uiOutput(outputId = "checkboxImageRepeat"))
+        ),   
+      
       box(
-        #style = "position: fixed",
         title = "Number of records",
-        background = "black",
+        background = "navy",
         width = 12,
         solidHeader = TRUE,
         status = "primary",
@@ -38,28 +50,22 @@ ui <- dashboardPage(
         textOutput('numberFilteredRecords')
         ),
       
-      width = 250
-  ), 
+      width = 400
+      ), 
 
   # body  
   dashboardBody(
     
     box(
-      title = "Select Parameters",
+      title = "Raw Data",
+      collapsible = TRUE,
+      collapsed = TRUE,
       width = 12,
-      #collapsible = TRUE, 
-      #collapsed = TRUE,
-      #background = "navy",
       solidHeader = TRUE,
       status = "primary",
       fluidRow(
-        box (title = "Plate", width = 2, status = "warning", uiOutput(outputId = "checkboxPlate")),
-        box (title = "Strain", width = 2, status = "warning", uiOutput(outputId = "checkboxStrain")),
-        box (title = "Compound", width = 2, status = "warning", uiOutput(outputId = "checkboxCompound")),
-        box (title = "Od", width = 2, status = "warning", uiOutput(outputId = "checkboxOd")),
-        box (title = "Dye", width = 2, status = "warning", uiOutput(outputId = "checkboxDye")),
-        box (title = "Compound dilution", width = 2, status = "warning", uiOutput(outputId = "checkboxCompDil")),
-        box (title = "Image repeat"), width = 2, status ="warning", uiOutput(outputId = "checkboxImageRepeat")
+        box (DT::dataTableOutput("tblParameters")),
+        box (DT::dataTableOutput("tblResults"))
         )
       ),
     
@@ -74,41 +80,94 @@ ui <- dashboardPage(
       ),
     
     box(
+      width = 12,
       selectInput(inputId = "axisX", 
                   label = "Select X-axis",
                   choices  = c("comp_dil", "od"),
                   selected = "comp_dil")
       ),
-   
-    box (
-      title = "Count Particles",
+ 
+    box( 
       width = 12,
-      solidHeader = TRUE,
-      status = "primary",
+      fluidRow(
+        box (
+          title = "Count Particles",
+          width = 6,
+          height = 600,
+          solidHeader = TRUE,
+          status = "primary",
+          fluidRow(
+            box(
+              width = 4,
+              height = 100,
+              solidHeader = TRUE,
+              checkboxInput(inputId = "log10transformCount",
+                            label = "Log10 Transformation X-axis",
+                            value = TRUE)
+              ),
+            
+            box(
+              width = 4,
+              height = 100,
+              solidHeader = TRUE,
+              selectInput(inputId = "facetRowCount", 
+                          label = "Facet Row",
+                          choices = c(None=".", "compound", "od", "well_rep"),
+                          selected = "well_rep")
+              ),
+            
+            box(
+              width = 4,
+              height = 100,
+              solidHeader = TRUE,
+              selectInput(inputId = "facetColCount", 
+                          label = "Facet Column",
+                          choices = c(None=".", "compound", "od", "strain"))
+              )
+          ),
       
-      checkboxInput(inputId = "log10transformCount",
-                    label = "Log10 Transformation X-axis",
-                    value = TRUE),
-      
-      selectInput(inputId = "facetRowCount", 
-                  label = "Facet Row",
-                  choices = c(None=".", "compound", "od", "well_rep")),
-      
-      selectInput(inputId = "facetColCount", 
-                  label = "Facet Column",
-                  choices = c(None=".", "compound", "od", "well_rep")),
-      
-      plotOutput("countPlot")
-      ),
+          plotOutput("countPlot")
+          ),
     
-    box (
-      title = "Density",
-      width = 12,
-      solidHeader = TRUE,
-      status = "primary",
-      plotOutput("densityPlot")
-      ),
-    
+        box (
+          title = "Density",
+          width = 6,
+          height = 600,
+          solidHeader = TRUE,
+          status = "primary",
+          fluidRow(
+            box(
+              width = 4,
+              height = 100,
+              solidHeader = TRUE,
+              selectInput(inputId = "facetRowDensity", 
+                          label = "Facet Row",
+                          choices = c("compound", compoundDilution = "comp_dil_factor" , od = "od_factor"))
+              ),
+            
+            box(
+              width = 4,
+              height = 100,
+              solidHeader = TRUE,
+              selectInput(inputId = "facetColDensity", 
+                          label = "Facet Column",
+                          choices = c(None=".", "compound", compoundDilution = "comp_dil_factor", od = "od_factor"))
+              ),
+      
+            box(
+              width = 4,
+              height = 100,
+              solidHeader = TRUE,
+              selectInput(inputId = "fillDensity",
+                          label = "Fill",
+                          choices = c("compound", compoundDilution = "comp_dil_factor", od = "od_factor"))
+              )
+            ),
+          
+          plotOutput("densityPlot")
+          )
+        ),
+      
     # box (
     #   title = "Particle",
     #   width = 12,
@@ -129,34 +188,66 @@ ui <- dashboardPage(
     #   
     #   plotOutput("particlePlot")
     #   ),
-    
+  
     box(
       title = "Mean Area",
       width = 12,
       solidHeader = TRUE,
       status = "primary",
+      fluidRow(  
+        box(
+          width = 4,
+          height = 100,
+          solidHeader=TRUE,
+          checkboxInput(inputId = "log10transformMeanArea",
+                        label = "Log10 Transformation X-axis",
+                        value = TRUE)
+          ),
+        
+        box(
+          width = 4,
+          height = 100,
+          solidHeader=TRUE,
+          selectInput(inputId = "facetRowArea", 
+                      label = "Facet Row",
+                      choices = c(None=".", "compound", "od", "well_rep", "strain"),
+                      selected = "well_rep"
+                      )
+          ),
+        
+        box(
+          width = 4,
+          height = 100,
+          solidHeader=TRUE,
+          selectInput(inputId = "facetColArea", 
+                      label = "Facet Column",
+                      choices = c(None=".", "compound", "od", "well_rep", "strain")
+                      )
+          ),
       
-      checkboxInput(inputId = "log10transformMeanArea",
-                    label = "Log10 Transformation X-axis",
-                    value = TRUE),
+        box(
+          width = 6,
+          solidHeader=TRUE,
+          plotOutput("meanAreaPlot")
+          ),
       
-      selectInput(inputId = "facetRowArea", 
-                  label = "Facet Row",
-                  choices = c(None=".", "compound", "od", "well_rep")),
-         
-      selectInput(inputId = "facetColArea", 
-                  label = "Facet Column",
-                  choices = c(None=".", "compound", "od", "well_rep")),
-      
-      
-      
-      
-      plotOutput("meanAreaPlot"),
-      plotOutput("meanImagePlot"),
-      plotOutput("meanExpPlot")
-      )
-    )
-  )
+        box(
+          width = 6,
+          solidHeader=TRUE,
+          plotOutput("meanImagePlot")
+          ),
+    
+        box(
+          width = 6,
+          solidHeader=TRUE,
+          plotOutput("meanExpPlot")
+          )
+        
+        ) #fluidrow
+      ) # box
+    ) # box
+  ) #dashboard
+) #ui dashboardPage
 
 # Define server logic required to draw a histogram
 server <- function(input, output) {
@@ -166,8 +257,9 @@ server <- function(input, output) {
     df_results <- input$results[1,4]#wat doe ik hier?
     if (!is.null(df_results))
     readr::read_csv(df_results, col_names = TRUE)%>%
-    separate(Label, into = c("exp_id" , "plate_id" , "well_id" , "image_rep"), sep="_")%>%
-    select (X1, well_id, image_rep, Area) 
+    separate(Label, into = c("exp_id" , "plate_rep" , "well_id" , "image_rep"), sep="_")%>%
+    tidyr::unite(id, "plate_rep", "well_id", sep = "-") %>%
+    select (X1, id, image_rep, Area) 
     })
 
   dataParameters <- reactive({
@@ -179,19 +271,20 @@ server <- function(input, output) {
     if (!is.null(df_parameters))
       readxl::read_xlsx(df_parameters, sheet = workbook[2]) %>%
       tidyr::unite(compound, "comp_name", "comp_id", "comp_trtmnt", sep = "-") %>%
-      dplyr::mutate(plate_id = as.numeric(plate_id)) %>%
+      #dplyr::mutate(plate_id = as.numeric(plate_id)) %>%
+      tidyr::unite(id, "plate_rep", "well_id", sep = "-") %>%
       dplyr::mutate(comp_dil = ifelse(is.na(comp_dil), 0, comp_dil)) 
     })
 
   dataMerge <- reactive({
-      dplyr::left_join(dataResults(), dataParameters(), by = c("well_id")) %>%
+      dplyr::left_join(dataResults(), dataParameters(), by = c("id")) %>%
       dplyr::mutate(od = as.numeric(od)) %>%
       dplyr::mutate(od_factor = as.factor(od)) %>%
       dplyr::mutate(comp_dil = as.numeric(comp_dil)) %>%
       dplyr::mutate(comp_dil_factor = as.factor(comp_dil)) %>%
       dplyr::mutate(image_rep = as.factor(image_rep)) %>%
-      dplyr::mutate(well_rep = as.factor(well_rep)) 
-    })
+      dplyr::mutate(well_rep = as.factor(well_rep))
+      })
   
   #filter dataMerge
   output$checkboxPlate <- renderUI({
@@ -335,35 +428,44 @@ server <- function(input, output) {
   
   output$countPlot <- renderPlot({
     
-      plot2 <- ggplot(data = sumImageRep(), mapping = aes_string(x = input$axisX, y = "count")) + #aes_string to be able to refer to input$axisX. reference to column count needs to be in between ""
+      plot1 <- ggplot(data = sumImageRep(), mapping = aes_string(x = input$axisX, y = "count")) + #aes_string to be able to refer to input$axisX. reference to column count needs to be in between ""
         geom_line(
           mapping = aes(color = image_rep)) +
-          ggtitle("Particle Count") #+
-          #scale_x_continuous(trans = 'log10') +
-          #facet_grid(od ~ well_rep, scale = "fixed")
-    
+          ggtitle("Particle Count")
+      
       if(input$log10transformCount == TRUE)
-        plot2 <- plot2 + scale_x_continuous(trans = 'log10')
+        plot1 <- plot1 + scale_x_continuous(trans = 'log10')
+      
+      
       
       facetsCount <- paste(input$facetRowCount, '~', input$facetColCount)
       if (facetsCount != '. ~ .') 
-        plot2 <- plot2 + facet_grid(facetsCount)
+        plot1 <- plot1 + facet_grid(facetsCount)
       
-      print(plot2)
+      
+       
+      print(plot1)
       })
 
   output$densityPlot <- renderPlot({
-      ggplot(data = dataMergeFiltered(), mapping = aes(x = log10(Area), y = comp_dil_factor, fill = od)) +
-        geom_density_ridges(
-          mapping = aes(height=(stat(density))),
-          bandwidth = 0.05,
-          alpha = 0.5
-          ) +
-        ggtitle ("Area Distribution (Density)") +
-        theme_ridges(center_axis_labels = TRUE) +
-        scale_x_continuous(expand = c(0.01, 0)) +
-        scale_y_discrete(expand = c(0.01, 0)) +
-        facet_grid(~od, scale = "fixed")
+    plot2 <- ggplot(data = dataMergeFiltered(), mapping = aes_string(x = "log10(Area)", y = input$facetRowDensity, fill = input$fillDensity)) +
+                geom_density_ridges(
+                  mapping = aes(height=(stat(density))),
+                  bandwidth = 0.05,
+                  alpha = 0.5
+                ) +
+                ggtitle ("Area Distribution (Density)") +
+                theme_ridges(center_axis_labels = TRUE) +
+                #coord_fixed(ratio = 1) +
+                scale_x_continuous(expand = c(0.01, 0)) +
+                scale_y_discrete(expand = c(0.01, 0)) 
+        
+              facetsDensity <- paste('~', input$facetColDensity)
+              if (facetsDensity != '~ .') 
+                 plot2 <- plot2 + facet_grid(facetsDensity)
+      
+              print(plot2)
+      
       })
 
   # output$particlePlot <- renderPlot({
@@ -412,8 +514,8 @@ server <- function(input, output) {
                 if (input$log10transformMeanArea == TRUE)
                   plot5 <- plot5 + scale_x_continuous(trans = 'log10')
                 
-                facetsArea <- paste(input$facetRowArea, '~', input$facetColArea)
-                if (facetsArea != '. ~ .') 
+                facetsArea <- paste('~', input$facetColArea)
+                if (facetsArea != '~ .') 
                   plot5 <- plot5 + facet_grid(facetsArea)
     
     print(plot5)
