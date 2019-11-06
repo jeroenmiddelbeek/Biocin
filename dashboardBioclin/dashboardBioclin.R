@@ -5,6 +5,9 @@ library(readxl)
 library(tidyverse)
 library(DT)
 library(ggridges)
+library(cowplot)
+
+theme_set(theme_cowplot(font_size=8))
 
 # set max file size
 options(shiny.maxRequestSize=100*1024^2)
@@ -93,7 +96,7 @@ ui <- dashboardPage(
         box (
           title = "Count Particles",
           width = 6,
-          height = 600,
+          height = 625,
           solidHeader = TRUE,
           status = "primary",
           fluidRow(
@@ -125,14 +128,14 @@ ui <- dashboardPage(
                           choices = c(None=".", "compound", "od", "strain"))
               )
           ),
-      
-          plotOutput("countPlot")
-          ),
+          plotOutput("countPlot"),
+          downloadButton(outputId = "downloadCountPlot", label = "Download countPlot")
+        ),
     
         box (
           title = "Density",
           width = 6,
-          height = 600,
+          height = 625,
           solidHeader = TRUE,
           status = "primary",
           fluidRow(
@@ -163,8 +166,8 @@ ui <- dashboardPage(
                           choices = c("compound", compoundDilution = "comp_dil_factor", od = "od_factor"))
               )
             ),
-          
-          plotOutput("densityPlot")
+          plotOutput("densityPlot"),
+          downloadButton(outputId = "downloadDensityPlot", label = "Download densityPlot")
           )
         ),
       
@@ -240,7 +243,10 @@ ui <- dashboardPage(
         box(
           width = 6,
           solidHeader=TRUE,
-          plotOutput("meanExpPlot")
+          plotOutput("meanExpPlot"),
+          downloadButton(outputId = "downloadMeanAreaPlot", label = "Download meanAreaPlot"),
+          downloadButton(outputId = "downloadMeanImagePlot", label = "Download meanImagePlot"),
+          downloadButton(outputId = "allGraphs", label = "Download Report")
           )
         
         ) #fluidrow
@@ -254,7 +260,7 @@ server <- function(input, output) {
   
   #read & merge datafiles
   dataResults <- reactive({
-    df_results <- input$results[1,4]#wat doe ik hier?
+    df_results <- input$results[1,4]
     if (!is.null(df_results))
     readr::read_csv(df_results, col_names = TRUE)%>%
     separate(Label, into = c("exp_id" , "plate_rep" , "well_id" , "image_rep"), sep="_")%>%
@@ -271,7 +277,6 @@ server <- function(input, output) {
     if (!is.null(df_parameters))
       readxl::read_xlsx(df_parameters, sheet = workbook[2]) %>%
       tidyr::unite(compound, "comp_name", "comp_id", "comp_trtmnt", sep = "-") %>%
-      #dplyr::mutate(plate_id = as.numeric(plate_id)) %>%
       tidyr::unite(id, "plate_rep", "well_id", sep = "-") %>%
       dplyr::mutate(comp_dil = ifelse(is.na(comp_dil), 0, comp_dil)) 
     })
@@ -426,47 +431,167 @@ server <- function(input, output) {
                                                          pageLength = 5,
                                                          searching = FALSE))
   
-  output$countPlot <- renderPlot({
+  # My_Theme = theme(
+  #   plot.title = element_text(size=12, face = "bold"),
+  #   axis.title.x = element_text(size = 10),
+  #   axis.text.x = element_text(size = 10),
+  #   axis.title.y = element_text(size = 10),
+  #   axis.text.y = element_text(size = 10),
+  #   legend.title = element_text(size = 10),
+  #   legend.text = element_text(size=10))
+  
+  plotCount <- reactive({
+    plot1 <- ggplot(data = sumImageRep(), mapping = aes_string(x = input$axisX, y = "count")) + #aes_string to be able to refer to input$axisX. reference to column count needs to be in between ""
+      geom_line(
+        mapping = aes(color = image_rep)) +
+      ggtitle("Particle Count") 
+   
+    if(input$log10transformCount == TRUE)
+      plot1 <- plot1 + scale_x_continuous(trans = 'log10')
     
-      plot1 <- ggplot(data = sumImageRep(), mapping = aes_string(x = input$axisX, y = "count")) + #aes_string to be able to refer to input$axisX. reference to column count needs to be in between ""
-        geom_line(
-          mapping = aes(color = image_rep)) +
-          ggtitle("Particle Count")
-      
-      if(input$log10transformCount == TRUE)
-        plot1 <- plot1 + scale_x_continuous(trans = 'log10')
-      
-      
-      
-      facetsCount <- paste(input$facetRowCount, '~', input$facetColCount)
-      if (facetsCount != '. ~ .') 
-        plot1 <- plot1 + facet_grid(facetsCount)
-      
-      
-       
-      print(plot1)
-      })
-
-  output$densityPlot <- renderPlot({
+    facetsCount <- paste(input$facetRowCount, '~', input$facetColCount)
+    if (facetsCount != '. ~ .')
+      plot1 <- plot1 + facet_grid(facetsCount)
+  })
+  
+  plotDensity <- reactive({
     plot2 <- ggplot(data = dataMergeFiltered(), mapping = aes_string(x = "log10(Area)", y = input$facetRowDensity, fill = input$fillDensity)) +
-                geom_density_ridges(
-                  mapping = aes(height=(stat(density))),
-                  bandwidth = 0.05,
-                  alpha = 0.5
-                ) +
-                ggtitle ("Area Distribution (Density)") +
-                theme_ridges(center_axis_labels = TRUE) +
-                #coord_fixed(ratio = 1) +
-                scale_x_continuous(expand = c(0.01, 0)) +
-                scale_y_discrete(expand = c(0.01, 0)) 
-        
-              facetsDensity <- paste('~', input$facetColDensity)
-              if (facetsDensity != '~ .') 
-                 plot2 <- plot2 + facet_grid(facetsDensity)
+      geom_density_ridges(
+        mapping = aes(height=(stat(density))),
+        bandwidth = 0.05,
+        alpha = 0.5
+      ) +
+      ggtitle ("Area Distribution (Density)") +
+     # theme_ridges(center_axis_labels = TRUE) +
+      #coord_fixed(ratio = 1) +
+      scale_x_continuous(expand = c(0.01, 0)) +
+      scale_y_discrete(expand = c(0.01, 0)) 
+
+    facetsDensity <- paste('~', input$facetColDensity)
+    if (facetsDensity != '~.')
+      plot2 <- plot2 + facet_grid(facetsDensity)
+  })
+  
+  plotMeanArea <- reactive({
+    plot4 <- ggplot(data = sumImageRep(), mapping = aes_string(x = input$axisX, y = "log10(meanArea)", color = "image_rep")) +
+                  geom_line() +
+                  #geom_errorbar(mapping = aes(x = log10(get(n)), ymin = log10(mean_area - sd_area) , ymax = log10(mean_area + sd_area))) +
+                  ggtitle("Intrawell Reproducibility") 
+    
+                if (input$log10transformMeanArea == TRUE)
+                plot4 <- plot4 + scale_x_continuous(trans = 'log10')
       
-              print(plot2)
-      
-      })
+                facetsArea <- paste(input$facetRowArea, '~', input$facetColArea)
+                if (facetsArea != '.~.') 
+                  plot4 <- plot4 + facet_grid(facetsArea)
+    })
+  
+  plotMeanImage <- reactive({
+    plot5 <- ggplot(data = sumWellRep(), mapping = aes_string(x = input$axisX, y = "log10(meanImage)")) +
+      geom_ribbon(mapping = aes_string(x = input$axisX, ymin = "log10(meanImage - semImage)", ymax = "log10(meanImage + semImage)", fill = "well_rep", alpha=0.1)) +
+      geom_line(mapping = aes(color = well_rep)) +
+      ggtitle("Interwell Reproducibility") 
+    
+    if (input$log10transformMeanArea == TRUE)
+      plot5 <- plot5 + scale_x_continuous(trans = 'log10')
+    
+    facetsArea <- paste('~', input$facetColArea)
+    if (facetsArea != '~.') 
+      plot5 <- plot5 + facet_grid(facetsArea)
+    })
+  
+  plotMeanExp <- reactive({
+    plot6 <- ggplot(data = sumExp(), mapping = aes_string(x = input$axisX, y = "log10(meanWell)")) +
+                  geom_ribbon(mapping = aes_string(x = input$axisX, ymin = "log10(meanWell - semWell)", ymax = "log10(meanWell + semWell)", alpha=0.1)) +
+                    geom_line() +
+                    ggtitle("Experiment") 
+    
+                if (input$log10transformMeanArea == TRUE)
+                  plot6 <- plot6 + scale_x_continuous(trans = 'log10')
+    
+                facetsArea <- paste('~', input$facetColArea)
+                if (facetsArea != '~.') 
+                  plot6 <- plot6 + facet_grid(facetsArea)
+    })    
+  
+ 
+  
+  output$countPlot <- renderPlot({
+    print(plotCount())
+    })
+  
+  output$densityPlot <- renderPlot({
+    print(plotDensity())
+    })
+  
+  output$meanAreaPlot <- renderPlot({
+    print(plotMeanArea())
+  })  
+  
+  output$meanImagePlot <- renderPlot({
+    print(plotMeanImage())
+  })
+  
+  output$meanExpPlot <- renderPlot({
+    print(plotMeanExp())
+  })  
+  
+  
+  
+  output$downloadCountPlot <- downloadHandler(
+    filename = function(){
+      paste("countPlot", "png", sep = ".")
+    },
+
+    content = function(file) {
+      ggsave(file,plotCount())
+    }
+  )
+  
+  output$downloadDensityPlot <- downloadHandler(
+    filename = function(){
+      paste("densityPlot", "png", sep = ".")
+    },
+    
+    content = function(file) {
+      ggsave(file,plotDensity())
+    }
+  )
+  
+  output$downloadMeanAreaPlot <- downloadHandler(
+    filename = function(){
+      paste("meanAreaPlot", "png", sep = ".")
+    },
+    content = function(file) {
+      ggsave(file,plotMeanArea())
+    }
+    )
+  
+  output$downloadMeanImagePlot <- downloadHandler(
+    filename = function(){
+      paste("meanImagePlot", "png", sep = ".")
+    },
+    content = function(file) {
+      ggsave(file, plotMeanImage())
+    }
+    )
+  
+  output$allGraphs = downloadHandler(
+    filename= function(){
+      paste("report", "png", sep = ".")
+    },
+    content = function(file) {
+     
+      panel <- cowplot::plot_grid(plotCount(), plotDensity(), plotMeanArea(), plotMeanImage(), plotMeanExp(), labels = c("A", "B", "C", "D", "E"), rel_widths = c(1,1), nrow = 3, ncol =2) #https://cran.r-project.org/web/packages/cowplot/cowplot.pdf
+      #pdf(file)
+      ggsave(file, panel)
+      #grid.arrange(plotCount(), plotDensity(), plotMeanArea(), plotMeanImage(), plotMeanExp(), nrow  = 5, newpage=T) #https://www.rdocumentation.org/packages/gridExtra/versions/2.3/topics/arrangeGrob
+      #dev.off()
+    }
+  )
+  
+  #https://stackoverflow.com/questions/49977969/using-a-download-handler-to-save-ggplot-images-in-shiny
+  
 
   # output$particlePlot <- renderPlot({
   #     
@@ -486,57 +611,14 @@ server <- function(input, output) {
   #       
   #     print(plot3)
   #   })
+ 
+
+    
   
-  output$meanAreaPlot <- renderPlot({
-    
-      plot4 <- ggplot(data = sumImageRep(), mapping = aes_string(x = input$axisX, y = "log10(meanArea)", color = "image_rep")) +
-                  geom_line() +
-                  #geom_errorbar(mapping = aes(x = log10(get(n)), ymin = log10(mean_area - sd_area) , ymax = log10(mean_area + sd_area))) +
-                  ggtitle("Intrawell Reproducibility") 
-    
-                if (input$log10transformMeanArea == TRUE)
-                plot4 <- plot4 + scale_x_continuous(trans = 'log10')
-      
-                facetsArea <- paste(input$facetRowArea, '~', input$facetColArea)
-                if (facetsArea != '. ~ .') 
-                  plot4 <- plot4 + facet_grid(facetsArea)
-                
-                print(plot4)
-  }) 
   
-  output$meanImagePlot <- renderPlot({
-    
-      plot5 <- ggplot(data = sumWellRep(), mapping = aes_string(x = input$axisX, y = "log10(meanImage)")) +
-                    geom_ribbon(mapping = aes_string(x = input$axisX, ymin = "log10(meanImage - semImage)", ymax = "log10(meanImage + semImage)", fill = "well_rep", alpha=0.1)) +
-                      geom_line(mapping = aes(color = well_rep)) +
-                      ggtitle("Interwell Reproducibility") 
-    
-                if (input$log10transformMeanArea == TRUE)
-                  plot5 <- plot5 + scale_x_continuous(trans = 'log10')
-                
-                facetsArea <- paste('~', input$facetColArea)
-                if (facetsArea != '~ .') 
-                  plot5 <- plot5 + facet_grid(facetsArea)
-    
-    print(plot5)
-  })
   
-  output$meanExpPlot <- renderPlot({
-    
-      plot6 <- ggplot(data = sumExp(), mapping = aes_string(x = input$axisX, y = "log10(meanWell)")) +
-                  geom_ribbon(mapping = aes_string(x = input$axisX, ymin = "log10(meanWell - semWell)", ymax = "log10(meanWell + semWell)", alpha=0.1)) +
-                    geom_line() +
-                    ggtitle("Experiment") 
-    
-                if (input$log10transformMeanArea == TRUE)
-                  plot6 <- plot6 + scale_x_continuous(trans = 'log10')
-    
-                facetsArea <- paste('~', input$facetColArea)
-                if (facetsArea != '~ .') 
-                  plot6 <- plot6 + facet_grid(facetsArea)
-    
-                print(plot6)
-  })  
+  #https://www.staringatr.com/3-the-grammar-of-graphics/multi-plots/2_savingmultiplefigures/
+  #https://cran.r-project.org/web/packages/egg/vignettes/Ecosystem.html
 }
 
 # Run the application 
