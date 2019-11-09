@@ -10,7 +10,7 @@ library(cowplot)
 theme_set(theme_cowplot(font_size=8))
 
 # set max file size
-options(shiny.maxRequestSize=100*1024^2)
+options(shiny.maxRequestSize=125*1024^2)
 
 # Define UI for application that draws a histogram
 ui <- dashboardPage(
@@ -29,8 +29,6 @@ ui <- dashboardPage(
       box(
         title = "Select Parameters",
         width = 12,
-        #collapsible = TRUE, 
-        #collapsed = TRUE,
         background = "navy",
         solidHeader = TRUE,
         status = "primary",
@@ -53,6 +51,15 @@ ui <- dashboardPage(
         textOutput('numberFilteredRecords')
         ),
       
+      box (
+        title = "select images",
+        width = 12,
+        background = "navy",
+        solidHeader = TRUE,
+        status = "primary",
+        uiOutput(outputId = "checkboxImage")
+        ),
+      
       width = 400
       ), 
 
@@ -67,8 +74,8 @@ ui <- dashboardPage(
       solidHeader = TRUE,
       status = "primary",
       fluidRow(
-        box (DT::dataTableOutput("tblParameters")),
-        box (DT::dataTableOutput("tblResults"))
+        box (DT::dataTableOutput("parametersTbl")),
+        box (DT::dataTableOutput("resultsTbl"))
         )
       ),
     
@@ -79,14 +86,25 @@ ui <- dashboardPage(
       width = 12,
       solidHeader = TRUE,
       status = "primary",
-      DT::dataTableOutput('tblDataMergeFiltered')
+      DT::dataTableOutput('dataMergeFilteredTbl')
       ),
+    
+    box(
+      title = "Summary Data",
+      width = 12,
+      solidHeader = TRUE,
+      status = "primary",
+      DT::dataTableOutput('sumExpTbl'),
+      downloadButton(outputId = "downloadSumExpTbl", label = "Download Summary Data")
+      ),
+    
+    
     
     box(
       width = 12,
       selectInput(inputId = "axisX", 
                   label = "Select X-axis",
-                  choices  = c("comp_dil", "od"),
+                  choices  = c("compound", "comp_dil", "od"),
                   selected = "comp_dil")
       ),
  
@@ -204,6 +222,9 @@ ui <- dashboardPage(
           solidHeader=TRUE,
           checkboxInput(inputId = "log10transformMeanArea",
                         label = "Log10 Transformation X-axis",
+                        value = TRUE),
+          checkboxInput(inputId = "plotSeries",
+                        label = "Plot Series",
                         value = TRUE)
           ),
         
@@ -246,6 +267,7 @@ ui <- dashboardPage(
           plotOutput("meanExpPlot"),
           downloadButton(outputId = "downloadMeanAreaPlot", label = "Download meanAreaPlot"),
           downloadButton(outputId = "downloadMeanImagePlot", label = "Download meanImagePlot"),
+          downloadButton(outputId = "downloadMeanExpPlot", label = "Download meanExpPlot"), 
           downloadButton(outputId = "allGraphs", label = "Download Report")
           )
         
@@ -290,6 +312,11 @@ server <- function(input, output) {
       dplyr::mutate(image_rep = as.factor(image_rep)) %>%
       dplyr::mutate(well_rep = as.factor(well_rep))
       })
+  
+  output$numberUnfilteredRecords <- renderText({
+                                paste("Number of unfiltered records is:", nrow(dataMerge()))
+                  })
+  
   
   #filter dataMerge
   output$checkboxPlate <- renderUI({
@@ -362,6 +389,16 @@ server <- function(input, output) {
                        selected = typeImageRepeat())
     })
   
+  output$checkboxImage <- renderUI({
+    typeImage <- reactive({
+      dataImage <- unique(dataMerge()$id)
+    })
+    
+    checkboxGroupInput(inputId = "filterImageId", label = "",
+                       choices = typeImage(),
+                       selected = typeImage())
+  })
+  
   dataMergeFiltered <- reactive({
           filter <- dplyr::filter(dataMerge(), 
                                   Area > input$area, 
@@ -371,11 +408,18 @@ server <- function(input, output) {
                                   od %in% input$filterOd,
                                   dye %in% input$filterDye,
                                   comp_dil %in% input$filterCompDil, 
-                                  image_rep %in% input$filterImageRep)#%>% # %in% matching operator --> filtered voor alle elementen in x (match) --> de == operator werkt niet omdattie dan opzoek gaat naar cellen die voldoen aan alle eigenschappen in input$strain
-                    #sample_frac(0.1)
+                                  image_rep %in% input$filterImageRep,
+                                  id %in% input$filterImageId)    #%>% # %in% matching operator --> filtered voor alle elementen in x (match) --> de == operator werkt niet omdattie dan opzoek gaat naar cellen die voldoen aan alle eigenschappen in input$strain
+                                  #sample_frac(0.1)
            })
   
-  #generate output
+  output$numberFilteredRecords <- renderText({
+                                paste("Number of filtered records is:", nrow(dataMergeFiltered()))
+                  })
+  
+  
+  #generate tables
+  
   sumImageRep <- reactive({
     dataMergeFiltered() %>%
       group_by(od, comp_dil, compound, well_rep, image_rep) %>%
@@ -408,28 +452,34 @@ server <- function(input, output) {
         )
   })
   
-  output$numberUnfilteredRecords <- renderText({
-                                paste("Number of unfiltered records is:", nrow(dataMerge()))
-                  })
-  
-  output$numberFilteredRecords <- renderText({
-                                paste("Number of filtered records is:", nrow(dataMergeFiltered()))
-                  })
-    
-  output$tblResults <- DT::renderDataTable(dataResults(), 
-                                                     options = list(scrollX = TRUE,
-                                                                    pageLength = 5,
-                                                                    searching = FALSE))
-  
-  output$tblParameters <- DT::renderDataTable(dataParameters(), 
+  output$resultsTbl <- DT::renderDataTable(dataResults(), 
                                            options = list(scrollX = TRUE,
                                                           pageLength = 5,
                                                           searching = FALSE))
   
-  output$tblDataMergeFiltered <- DT::renderDataTable(dataMergeFiltered(), 
+  output$parametersTbl <- DT::renderDataTable(dataParameters(), 
+                                              options = list(scrollX = TRUE,
+                                                            pageLength = 5,
+                                                            searching = FALSE))
+  
+  output$dataMergeFilteredTbl <- DT::renderDataTable(dataMergeFiltered(), 
+                                                    options = list(scrollX = TRUE,
+                                                                  pageLength = 5,
+                                                                  searching = FALSE))
+  
+  output$sumExpTbl <- DT::renderDataTable(sumExp(),
                                           options = list(scrollX = TRUE,
-                                                         pageLength = 5,
-                                                         searching = FALSE))
+                                                        pageLength = 5,
+                                                        searching = FALSE))
+  
+  output$downloadSumExpTbl <- downloadHandler(
+    filename = function(){
+      paste("sumExp", "csv", sep = ".")
+    },
+    content = function(file){ 
+      write.csv(sumExp(), file, row.names = FALSE)
+      }
+    )
   
   # My_Theme = theme(
   #   plot.title = element_text(size=12, face = "bold"),
@@ -439,6 +489,8 @@ server <- function(input, output) {
   #   axis.text.y = element_text(size = 10),
   #   legend.title = element_text(size = 10),
   #   legend.text = element_text(size=10))
+  
+  #generate plots
   
   plotCount <- reactive({
     plot1 <- ggplot(data = sumImageRep(), mapping = aes_string(x = input$axisX, y = "count")) + #aes_string to be able to refer to input$axisX. reference to column count needs to be in between ""
@@ -474,10 +526,15 @@ server <- function(input, output) {
   
   plotMeanArea <- reactive({
     plot4 <- ggplot(data = sumImageRep(), mapping = aes_string(x = input$axisX, y = "log10(meanArea)", color = "image_rep")) +
-                  geom_line() +
-                  #geom_errorbar(mapping = aes(x = log10(get(n)), ymin = log10(mean_area - sd_area) , ymax = log10(mean_area + sd_area))) +
-                  ggtitle("Intrawell Reproducibility") 
-    
+                ggtitle("Intrawell Reproducibility")
+      
+      
+                if (input$plotSeries == TRUE){
+                  plot4 <- plot4 + geom_line() 
+                } else {
+                  plot4 <- plot4 + geom_boxplot(mapping = aes(x = compound))
+                }
+                
                 if (input$log10transformMeanArea == TRUE)
                 plot4 <- plot4 + scale_x_continuous(trans = 'log10')
       
@@ -487,33 +544,42 @@ server <- function(input, output) {
     })
   
   plotMeanImage <- reactive({
-    plot5 <- ggplot(data = sumWellRep(), mapping = aes_string(x = input$axisX, y = "log10(meanImage)")) +
-      geom_ribbon(mapping = aes_string(x = input$axisX, ymin = "log10(meanImage - semImage)", ymax = "log10(meanImage + semImage)", fill = "well_rep", alpha=0.1)) +
-      geom_line(mapping = aes(color = well_rep)) +
-      ggtitle("Interwell Reproducibility") 
+    plot5 <- ggplot()+ 
+                ggtitle("Interwell Reproducibility") 
+      
+                if (input$plotSeries == TRUE){
+                  plot5 <- plot5 + geom_ribbon(data = sumWellRep(), mapping = aes_string(x = input$axisX, ymin = "log10(meanImage - semImage)", ymax = "log10(meanImage + semImage)", fill = "well_rep", alpha=0.1)) +
+                  geom_line(data = sumWellRep(), mapping = aes_string(x = input$axisX, y = "log10(meanImage)", color = "well_rep"))
+                } else {
+                  plot5 <- plot5 + geom_boxplot(data= sumImageRep(), mapping = aes_string(x = "compound", y = "log10(meanArea)", color = "well_rep"))
+                }
+              
+                if (input$log10transformMeanArea == TRUE)
+                  plot5 <- plot5 + scale_x_continuous(trans = 'log10')
     
-    if (input$log10transformMeanArea == TRUE)
-      plot5 <- plot5 + scale_x_continuous(trans = 'log10')
-    
-    facetsArea <- paste('~', input$facetColArea)
-    if (facetsArea != '~.') 
-      plot5 <- plot5 + facet_grid(facetsArea)
+                facetsArea <- paste('~', input$facetColArea)
+                if (facetsArea != '~.')
+                  plot5 <- plot5 + facet_grid(facetsArea)
     })
   
   plotMeanExp <- reactive({
-    plot6 <- ggplot(data = sumExp(), mapping = aes_string(x = input$axisX, y = "log10(meanWell)")) +
-                  geom_ribbon(mapping = aes_string(x = input$axisX, ymin = "log10(meanWell - semWell)", ymax = "log10(meanWell + semWell)", alpha=0.1)) +
-                    geom_line() +
-                    ggtitle("Experiment") 
-    
+    plot6 <- ggplot() + 
+                ggtitle("Experiment")
+      
+                if (input$plotSeries == TRUE){
+                  plot6 <- plot6 + geom_ribbon(data = sumExp(), mapping = aes_string(x = input$axisX, ymin = "log10(meanWell - semWell)", ymax = "log10(meanWell + semWell)", fill = "compound", alpha=0.1)) +
+                  geom_line(data = sumExp(), mapping = aes_string(x = input$axisX, y = "log10(meanWell)", color = "compound"))
+                } else {
+                  plot6 <- plot6 + geom_boxplot(data = sumWellRep(), mapping = aes_string(x = "compound", y="log10(meanImage)"))
+                }
+                
                 if (input$log10transformMeanArea == TRUE)
                   plot6 <- plot6 + scale_x_continuous(trans = 'log10')
     
                 facetsArea <- paste('~', input$facetColArea)
-                if (facetsArea != '~.') 
-                  plot6 <- plot6 + facet_grid(facetsArea)
+                 if (facetsArea != '~.') 
+                   plot6 <- plot6 + facet_grid(facetsArea)
     })    
-  
  
   
   output$countPlot <- renderPlot({
@@ -537,26 +603,23 @@ server <- function(input, output) {
   })  
   
   
-  
   output$downloadCountPlot <- downloadHandler(
     filename = function(){
       paste("countPlot", "png", sep = ".")
     },
-
     content = function(file) {
       ggsave(file,plotCount())
     }
-  )
+    )
   
   output$downloadDensityPlot <- downloadHandler(
     filename = function(){
       paste("densityPlot", "png", sep = ".")
     },
-    
     content = function(file) {
       ggsave(file,plotDensity())
     }
-  )
+    )
   
   output$downloadMeanAreaPlot <- downloadHandler(
     filename = function(){
@@ -576,21 +639,27 @@ server <- function(input, output) {
     }
     )
   
+  output$downloadMeanExpPlot <- downloadHandler(
+    filename = function(){
+      paste("meanExpPlot", "png", sep = ".")
+    },
+    content = function(file) {
+      ggsave(file, plotMeanExp())
+    }
+  )
+  
+  
   output$allGraphs = downloadHandler(
     filename= function(){
       paste("report", "png", sep = ".")
     },
     content = function(file) {
-     
       panel <- cowplot::plot_grid(plotCount(), plotDensity(), plotMeanArea(), plotMeanImage(), plotMeanExp(), labels = c("A", "B", "C", "D", "E"), rel_widths = c(1,1), nrow = 3, ncol =2) #https://cran.r-project.org/web/packages/cowplot/cowplot.pdf
-      #pdf(file)
       ggsave(file, panel)
-      #grid.arrange(plotCount(), plotDensity(), plotMeanArea(), plotMeanImage(), plotMeanExp(), nrow  = 5, newpage=T) #https://www.rdocumentation.org/packages/gridExtra/versions/2.3/topics/arrangeGrob
-      #dev.off()
-    }
-  )
+    }  
+    )
   
-  #https://stackoverflow.com/questions/49977969/using-a-download-handler-to-save-ggplot-images-in-shiny
+  
   
 
   # output$particlePlot <- renderPlot({
@@ -615,8 +684,7 @@ server <- function(input, output) {
 
     
   
-  
-  
+  #https://stackoverflow.com/questions/49977969/using-a-download-handler-to-save-ggplot-images-in-shiny
   #https://www.staringatr.com/3-the-grammar-of-graphics/multi-plots/2_savingmultiplefigures/
   #https://cran.r-project.org/web/packages/egg/vignettes/Ecosystem.html
 }
